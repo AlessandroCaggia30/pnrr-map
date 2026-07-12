@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PNRR — Mappa degli Investimenti</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #0066CC;
+    --blue-dark: #004D99;
+    --blue-light: #E8F1FB;
+    --green: #008055;
+    --red: #CC334F;
+    --gray-100: #F5F6F7;
+    --gray-200: #E8EAED;
+    --gray-400: #9EA4AC;
+    --gray-700: #3D4045;
+    --white: #FFFFFF;
+    --sidebar: 380px;
+    --header: 64px;
+  }
+
+  body {
+    font-family: 'Titillium Web', sans-serif;
+    background: var(--gray-100);
+    color: var(--gray-700);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── HEADER ── */
+  header {
+    height: var(--header);
+    background: var(--blue-dark);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    z-index: 1000;
+    flex-shrink: 0;
+  }
+  .gov-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+    text-decoration: none;
+  }
+  .gov-logo svg { width: 36px; height: 36px; }
+  .gov-logo-text { display: flex; flex-direction: column; }
+  .gov-logo-text .title { font-size: 18px; font-weight: 700; letter-spacing: .5px; }
+  .gov-logo-text .sub { font-size: 11px; font-weight: 300; opacity: .85; letter-spacing: 1px; text-transform: uppercase; }
+  .header-divider { width: 1px; height: 36px; background: rgba(255,255,255,.3); margin: 0 8px; }
+  .header-badge {
+    background: rgba(255,255,255,.15);
+    border: 1px solid rgba(255,255,255,.3);
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: .5px;
+  }
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .level-pills { display: flex; gap: 4px; }
+  .level-pill {
+    cursor: pointer;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1.5px solid rgba(255,255,255,.4);
+    color: rgba(255,255,255,.7);
+    transition: all .2s;
+    background: transparent;
+    letter-spacing: .3px;
+  }
+  .level-pill.active {
+    background: white;
+    color: var(--blue-dark);
+    border-color: white;
+  }
+  .level-pill:hover:not(.active) { border-color: white; color: white; }
+  .mode-toggle {
+    display: flex;
+    gap: 0;
+    border: 1.5px solid rgba(255,255,255,.4);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  .mode-btn {
+    cursor: pointer;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,.65);
+    background: transparent;
+    border: none;
+    transition: all .2s;
+    letter-spacing: .3px;
+  }
+  .mode-btn.active { background: white; color: var(--blue-dark); }
+  .mode-btn:hover:not(.active) { color: white; }
+
+  /* ── LAYOUT ── */
+  .main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ── MAP ── */
+  #map {
+    flex: 1;
+    z-index: 1;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: var(--sidebar);
+    background: white;
+    border-left: 1px solid var(--gray-200);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 10;
+    box-shadow: -4px 0 16px rgba(0,0,0,.06);
+  }
+
+  .sidebar-header {
+    padding: 20px 20px 0;
+    border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
+  }
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--gray-400);
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .breadcrumb span { cursor: pointer; transition: color .15s; }
+  .breadcrumb span:hover { color: var(--blue); }
+  .breadcrumb span.active { color: var(--blue); font-weight: 600; }
+  .breadcrumb .sep { color: var(--gray-200); }
+  .sidebar-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--gray-700);
+    margin-bottom: 4px;
+    line-height: 1.2;
+  }
+  .sidebar-subtitle {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-bottom: 16px;
+  }
+
+  .sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px 24px;
+  }
+  .sidebar-body::-webkit-scrollbar { width: 4px; }
+  .sidebar-body::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 4px; }
+
+  /* ── KPI CARDS ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .kpi {
+    background: var(--gray-100);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    border: 1px solid var(--gray-200);
+  }
+  .kpi.accent { background: var(--blue-light); border-color: #C2D9F0; }
+  .kpi-label { font-size: 10px; font-weight: 600; color: var(--gray-400); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 4px; }
+  .kpi-value { font-size: 22px; font-weight: 700; color: var(--gray-700); line-height: 1; }
+  .kpi.accent .kpi-value { color: var(--blue-dark); }
+  .kpi-unit { font-size: 11px; font-weight: 400; color: var(--gray-400); margin-top: 2px; }
+
+  /* ── SECTION ── */
+  .section { margin-bottom: 20px; }
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--gray-400);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--gray-200); }
+
+  /* ── STATUS BAR ── */
+  .status-bar { display: flex; gap: 6px; margin-bottom: 8px; }
+  .status-item {
+    flex: 1;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .3px;
+  }
+  .status-item.attivo { background: #E6F4EF; color: var(--green); }
+  .status-item.chiuso { background: #FDECEA; color: var(--red); }
+  .status-item .val { font-size: 18px; display: block; margin-bottom: 2px; }
+
+  /* ── BAR LIST (sectors) ── */
+  .bar-list { display: flex; flex-direction: column; gap: 8px; }
+  .bar-item {}
+  .bar-label { font-size: 11px; font-weight: 600; color: var(--gray-700); margin-bottom: 3px; display: flex; justify-content: space-between; }
+  .bar-label span { color: var(--gray-400); font-weight: 400; }
+  .bar-track { height: 6px; background: var(--gray-200); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; background: var(--blue); transition: width .4s ease; }
+
+  /* ── CHART ── */
+  .chart-wrap { position: relative; height: 180px; margin-bottom: 8px; }
+
+  /* ── DRILL LIST ── */
+  .drill-list { display: flex; flex-direction: column; gap: 4px; }
+  .drill-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .15s;
+    border: 1px solid transparent;
+    gap: 10px;
+  }
+  .drill-item:hover { background: var(--blue-light); border-color: #C2D9F0; }
+  .drill-item-name { font-size: 13px; font-weight: 600; flex: 1; }
+  .drill-item-meta { font-size: 11px; color: var(--gray-400); text-align: right; }
+  .drill-item-cost { font-size: 13px; font-weight: 700; color: var(--blue); }
+  .drill-arrow { color: var(--gray-400); font-size: 14px; }
+
+  /* ── BACK BUTTON ── */
+  .back-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--blue);
+    cursor: pointer;
+    padding: 6px 0;
+    border: none;
+    background: none;
+    margin-bottom: 12px;
+    transition: opacity .15s;
+  }
+  .back-btn:hover { opacity: .75; }
+
+  /* ── LOADING ── */
+  .loading {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--gray-200);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 14px; color: var(--gray-400); font-weight: 600; }
+
+  /* ── TOOLTIP ── */
+  .map-tooltip {
+    background: white;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.15);
+    padding: 12px 14px;
+    font-family: 'Titillium Web', sans-serif;
+    font-size: 13px;
+    min-width: 180px;
+  }
+  .map-tooltip strong { display: block; font-size: 14px; font-weight: 700; color: var(--gray-700); margin-bottom: 6px; }
+  .map-tooltip .tt-row { display: flex; justify-content: space-between; gap: 12px; color: var(--gray-400); font-size: 12px; margin-top: 2px; }
+  .map-tooltip .tt-row b { color: var(--gray-700); }
+
+  /* ── LEGEND ── */
+  .legend {
+    background: white;
+    border-radius: 10px;
+    padding: 12px 14px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.1);
+    font-family: 'Titillium Web', sans-serif;
+    font-size: 11px;
+    min-width: 140px;
+  }
+  .legend h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--gray-400); margin-bottom: 8px; }
+  .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .legend-swatch { width: 16px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── FOOTER ── */
+  .map-footer {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: white;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 10px;
+    color: var(--gray-400);
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    z-index: 500;
+    letter-spacing: .3px;
+  }
+
+  /* ── EFFICIENCY ── */
+  .efficiency-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 6px 0 4px;
+    background: var(--gray-200);
+  }
+  .efficiency-bar .ontime { background: var(--green); }
+  .efficiency-bar .overdue { background: var(--red); }
+  .eff-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--gray-400); }
+  .eff-row b { font-weight: 700; }
+  .eff-row .good { color: var(--green); }
+  .eff-row .bad { color: var(--red); }
+  .delay-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .delay-badge.good { background: #E6F4EF; color: var(--green); }
+  .delay-badge.bad  { background: #FDECEA; color: var(--red); }
+
+  /* ── TAG LIST ── */
+  .tag-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag { padding: 3px 9px; border-radius: 10px; font-size: 10px; font-weight: 600;
+         background: var(--gray-100); color: var(--gray-700); border: 1px solid var(--gray-200); }
+
+  /* ── EMPTY STATE ── */
+  .empty { text-align: center; padding: 32px 16px; color: var(--gray-400); font-size: 13px; }
+  .empty svg { margin-bottom: 12px; opacity: .4; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="gov-logo">
+    <svg viewBox="0 0 36 36" fill="none">
+      <rect width="36" height="36" rx="6" fill="rgba(255,255,255,0.15)"/>
+      <path d="M18 6l2.5 7.5H28l-6.5 4.5 2.5 7.5L18 21l-6 4.5 2.5-7.5L8 13.5h7.5L18 6z" fill="white"/>
+    </svg>
+    <div class="gov-logo-text">
+      <span class="title">Italia Domani</span>
+      <span class="sub">Piano Nazionale di Ripresa e Resilienza</span>
+    </div>
+  </div>
+  <div class="header-divider"></div>
+  <span class="header-badge">PNRR — Mappa degli Investimenti</span>
+  <div class="header-right">
+    <div class="mode-toggle">
+      <button class="mode-btn active" data-mode="cost" onclick="setMode('cost')">Investimento</button>
+      <button class="mode-btn" data-mode="overdue" onclick="setMode('overdue')">Ritardi</button>
+    </div>
+    <div class="level-pills">
+      <button class="level-pill active" data-level="region" onclick="setLevel('region')">Regioni</button>
+      <button class="level-pill" data-level="province" onclick="setLevel('province')">Province</button>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <div id="map">
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <div class="loading-text">Caricamento dati…</div>
+    </div>
+    <div class="map-footer">Fonte: OpenCUP · ANAC · Italia Domani &nbsp;|&nbsp; Aggiornamento: luglio 2026</div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="breadcrumb" id="breadcrumb">
+        <span class="active" onclick="drillNational()">Italia</span>
+      </div>
+      <div class="sidebar-title" id="sidebar-title">Italia</div>
+      <div class="sidebar-subtitle" id="sidebar-subtitle">Panoramica nazionale degli investimenti PNRR</div>
+    </div>
+    <div class="sidebar-body" id="sidebar-body">
+      <div class="loading" style="position:relative;height:200px;background:transparent;">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+let state = {
+  level: 'region',
+  selected: null,
+  drillRegion: null,
+  colorMode: 'cost',  // 'cost' | 'overdue'
+};
+
+let DATA = {};
+let geoRegions, geoProvinces;
+let map, layerRegions, layerProvinces, legend;
+
+// ── COLOR SCALES ──
+const COLORS = {
+  cost:    ['#D6E8FA','#A8CEEF','#6AAEE0','#3B8ED1','#1A6DB5','#0A4F8A','#052E52'],
+  overdue: ['#E8F4EF','#FDECEA','#F5B8C0','#EC8090','#E04060','#CC334F','#8B1020'],
+  // keep legacy keys pointing to cost palette
+  region:   ['#D6E8FA','#A8CEEF','#6AAEE0','#3B8ED1','#1A6DB5','#0A4F8A','#052E52'],
+  province: ['#D6F0E8','#A8DECE','#6ABFAA','#3B9F88','#1A7D68','#0A5A4A','#03342A'],
+};
+
+function getColor(val, max, palette) {
+  const t = Math.min(val / (max * 0.85), 1);
+  const idx = Math.floor(t * (palette.length - 1));
+  return palette[Math.min(idx, palette.length - 1)];
+}
+
+// ── FORMAT HELPERS ──
+function fmtEur(v) {
+  if (!v || isNaN(v)) return '—';
+  if (v >= 1e9) return (v / 1e9).toFixed(1) + ' Mld €';
+  if (v >= 1e6) return (v / 1e6).toFixed(0) + ' Mln €';
+  return (v / 1e3).toFixed(0) + 'K €';
+}
+function fmtN(v) {
+  if (!v) return '0';
+  return v.toLocaleString('it-IT');
+}
+function capitalize(s) {
+  if (!s) return '';
+  return s.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+// ── LOAD ALL DATA ──
+async function loadData() {
+  const [nat, reg, prov, geoR, geoP] = await Promise.all([
+    fetch('data/national.json').then(r => r.json()),
+    fetch('data/regions.json').then(r => r.json()),
+    fetch('data/provinces.json').then(r => r.json()),
+    fetch('data/regions.geojson').then(r => r.json()),
+    fetch('data/provinces.geojson').then(r => r.json()),
+  ]);
+  DATA.national = nat;
+  DATA.regions = Object.fromEntries(reg.map(r => [r.code, r]));
+  DATA.provinces = Object.fromEntries(prov.map(p => [p.code, p]));
+  geoRegions = geoR;
+  geoProvinces = geoP;
+  document.getElementById('loading').style.display = 'none';
+  initMap();
+  renderNational();
+}
+
+// ── MAP INIT ──
+function initMap() {
+  map = L.map('map', {
+    center: [41.9, 12.5],
+    zoom: 6,
+    zoomControl: true,
+    attributionControl: false,
+  });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+  }).addTo(map);
+
+  drawRegions();
+  addLegend();
+}
+
+// ── DRAW REGIONS ──
+function drawRegions() {
+  if (layerRegions) map.removeLayer(layerRegions);
+  const isOverdue = state.colorMode === 'overdue';
+  const vals = Object.values(DATA.regions).map(r => isOverdue ? (r.n_overdue||0) : r.cost_total_eur);
+  const max = Math.max(...vals);
+  const palette = isOverdue ? COLORS.overdue : COLORS.cost;
+
+  layerRegions = L.geoJSON(geoRegions, {
+    style: f => {
+      const code = String(f.properties.reg_istat_code).padStart(2,'0');
+      const d = DATA.regions[code];
+      const val = d ? (isOverdue ? (d.n_overdue||0) : d.cost_total_eur) : 0;
+      return {
+        fillColor: getColor(val, max, palette),
+        weight: 1.5,
+        color: 'white',
+        fillOpacity: 0.82,
+      };
+    },
+    onEachFeature: (f, layer) => {
+      const code = String(f.properties.reg_istat_code).padStart(2,'0');
+      const d = DATA.regions[code];
+      layer.on({
+        mouseover: e => {
+          e.target.setStyle({ weight: 2.5, color: '#0066CC', fillOpacity: 0.95 });
+          if (d) {
+            layer.bindTooltip(tooltipHtml(capitalize(d.name), d), {
+              sticky: true, className: 'map-tooltip', opacity: 1,
+            }).openTooltip();
+          }
+        },
+        mouseout: e => {
+          layerRegions.resetStyle(e.target);
+          layer.closeTooltip();
+        },
+        click: () => drillRegion(code),
+      });
+    },
+  }).addTo(map);
+}
+
+// ── DRAW PROVINCES ──
+function drawProvinces(filterRegCode) {
+  if (layerProvinces) map.removeLayer(layerProvinces);
+
+  const filteredFeatures = filterRegCode
+    ? geoProvinces.features.filter(f => String(f.properties.reg_istat_code).padStart(2,'0') === filterRegCode)
+    : geoProvinces.features;
+
+  const isOverdue = state.colorMode === 'overdue';
+  const vals = filteredFeatures.map(f => {
+    const code = String(f.properties.prov_istat_code).padStart(3,'0');
+    const d = DATA.provinces[code];
+    return d ? (isOverdue ? (d.n_overdue||0) : d.cost_total_eur) : 0;
+  });
+  const max = Math.max(...vals);
+  const palette = isOverdue ? COLORS.overdue : COLORS.cost;
+
+  layerProvinces = L.geoJSON({ type:'FeatureCollection', features: filteredFeatures }, {
+    style: f => {
+      const code = String(f.properties.prov_istat_code).padStart(3,'0');
+      const d = DATA.provinces[code];
+      const val = d ? (isOverdue ? (d.n_overdue||0) : d.cost_total_eur) : 0;
+      return {
+        fillColor: getColor(val, max, palette),
+        weight: 1,
+        color: 'white',
+        fillOpacity: 0.82,
+      };
+    },
+    onEachFeature: (f, layer) => {
+      const code = String(f.properties.prov_istat_code).padStart(3,'0');
+      const d = DATA.provinces[code];
+      layer.on({
+        mouseover: e => {
+          e.target.setStyle({ weight: 2.5, color: '#0A5A4A', fillOpacity: 0.95 });
+          if (d) {
+            layer.bindTooltip(tooltipHtml(capitalize(d.name), d), {
+              sticky: true, className: 'map-tooltip', opacity: 1,
+            }).openTooltip();
+          }
+        },
+        mouseout: e => {
+          layerProvinces.resetStyle(e.target);
+          layer.closeTooltip();
+        },
+        click: () => drillProvince(code),
+      });
+    },
+  }).addTo(map);
+}
+
+function tooltipHtml(name, d) {
+  return `<div class="map-tooltip">
+    <strong>${name}</strong>
+    <div class="tt-row">Investimento totale <b>${fmtEur(d.cost_total_eur)}</b></div>
+    <div class="tt-row">Progetti <b>${fmtN(d.n_projects)}</b></div>
+    <div class="tt-row">Gare d'appalto <b>${fmtN(d.n_tenders)}</b></div>
+  </div>`;
+}
+
+// ── LEGEND ──
+function addLegend() {
+  const LegendControl = L.Control.extend({
+    onAdd: () => {
+      const div = L.DomUtil.create('div', 'legend');
+      div.id = 'legend-box';
+      updateLegendContent(div, 'region');
+      return div;
+    }
+  });
+  legend = new LegendControl({ position: 'bottomright' });
+  legend.addTo(map);
+}
+
+function updateLegendContent(div, level) {
+  const palette = COLORS[level];
+  const labels = level === 'region'
+    ? ['< 500 Mln','500 Mln','1 Mld','2 Mld','4 Mld','6 Mld','> 8 Mld']
+    : ['< 50 Mln','50 Mln','200 Mln','500 Mln','1 Mld','2 Mld','> 3 Mld'];
+  div.innerHTML = `<h4>Investimento</h4>${palette.map((c,i) =>
+    `<div class="legend-row"><div class="legend-swatch" style="background:${c}"></div>${labels[i]}</div>`
+  ).join('')}`;
+}
+
+// ── DRILL NAVIGATION ──
+function drillNational() {
+  state.selected = null;
+  state.drillRegion = null;
+  state.level = 'region';
+  setLevelPills('region');
+  if (layerProvinces) { map.removeLayer(layerProvinces); layerProvinces = null; }
+  drawRegions();
+  map.flyTo([41.9, 12.5], 6, { duration: 1 });
+  updateLegendContent(document.getElementById('legend-box'), 'region');
+  renderNational();
+}
+
+function drillRegion(code) {
+  state.drillRegion = code;
+  state.level = 'province';
+  setLevelPills('province');
+  if (layerRegions) { map.removeLayer(layerRegions); layerRegions = null; }
+  drawProvinces(code);
+  const d = DATA.regions[code];
+  // Zoom to region bounds
+  const regionFeature = geoRegions.features.find(f => String(f.properties.reg_istat_code).padStart(2,'0') === code);
+  if (regionFeature) {
+    const bounds = L.geoJSON(regionFeature).getBounds();
+    map.flyToBounds(bounds, { padding: [40,40], duration: 1 });
+  }
+  updateLegendContent(document.getElementById('legend-box'), 'province');
+  renderRegion(code);
+}
+
+function drillProvince(code) {
+  state.selected = code;
+  renderProvince(code);
+}
+
+function setMode(mode) {
+  state.colorMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  const legendLabels = mode === 'overdue'
+    ? ['0','1-10','10-50','50-100','100-500','500-1K','> 1K']
+    : ['< 500 Mln','500 Mln','1 Mld','2 Mld','4 Mld','6 Mld','> 8 Mld'];
+  const palette = COLORS[mode];
+  const box = document.getElementById('legend-box');
+  box.innerHTML = `<h4>${mode === 'overdue' ? 'Progetti in ritardo' : 'Investimento'}</h4>`
+    + palette.map((c,i) => `<div class="legend-row"><div class="legend-swatch" style="background:${c}"></div>${legendLabels[i]}</div>`).join('');
+  if (state.level === 'region') { drawRegions(); }
+  else { drawProvinces(state.drillRegion); }
+}
+
+function setLevel(level) {
+  if (level === 'region') drillNational();
+  else {
+    state.level = 'province';
+    setLevelPills('province');
+    if (layerRegions) { map.removeLayer(layerRegions); layerRegions = null; }
+    drawProvinces(state.drillRegion);
+    updateLegendContent(document.getElementById('legend-box'), 'province');
+    if (!state.drillRegion) renderAllProvinces();
+  }
+}
+
+function setLevelPills(active) {
+  document.querySelectorAll('.level-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.level === active);
+  });
+}
+
+// ── SIDEBAR RENDERS ──
+let chartInstance = null;
+
+function efficiencyBlock(d) {
+  if (!d.n_with_dates) return '';
+  const pct = d.pct_on_time != null ? d.pct_on_time.toFixed(0) : null;
+  const delay = d.avg_delay_days != null ? Math.round(d.avg_delay_days) : null;
+  const delayLabel = delay != null
+    ? (delay <= 0 ? `<span class="delay-badge good">▲ ${Math.abs(delay)}gg in anticipo</span>`
+                  : `<span class="delay-badge bad">▼ ${delay}gg in ritardo</span>`)
+    : '';
+  const ontimePct = pct != null ? parseFloat(pct) : 50;
+  const overduePct = 100 - ontimePct;
+  return `
+    <div class="section">
+      <div class="section-title">Efficienza temporale</div>
+      <div class="kpi-grid" style="grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+        <div class="kpi" style="padding:10px">
+          <div class="kpi-label">Con date</div>
+          <div class="kpi-value" style="font-size:16px">${fmtN(d.n_with_dates)}</div>
+        </div>
+        <div class="kpi" style="padding:10px">
+          <div class="kpi-label">Completati</div>
+          <div class="kpi-value" style="font-size:16px">${fmtN(d.n_completed)}</div>
+        </div>
+        <div class="kpi" style="padding:10px;background:#FDECEA;border-color:#F5B8C0">
+          <div class="kpi-label">In ritardo</div>
+          <div class="kpi-value" style="font-size:16px;color:var(--red)">${fmtN(d.n_overdue||0)}</div>
+        </div>
+      </div>
+      ${pct != null ? `
+      <div class="efficiency-bar">
+        <div class="ontime" style="width:${ontimePct}%"></div>
+        <div class="overdue" style="width:${overduePct}%"></div>
+      </div>
+      <div class="eff-row">
+        <span><b class="good">${pct}%</b> nei tempi</span>
+        ${delayLabel}
+      </div>` : ''}
+    </div>`;
+}
+
+function renderNational() {
+  const d = DATA.national;
+  setBreadcrumb([{label:'Italia',action:'drillNational()'}]);
+  setHeader('Italia', `${fmtN(d.n_projects)} progetti · ${fmtN(d.n_tenders)} gare d'appalto`);
+
+  const sectors = Object.entries(d.top_sectors).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const maxS = sectors[0][1];
+
+  const stato = d.stato || {};
+  const attivo = stato.ATTIVO || 0;
+  const chiuso = stato.CHIUSO || 0;
+
+  const byYear = Object.entries(d.by_year || {}).filter(([y])=>y && y!=='nan').sort((a,b)=>+a[0]-+b[0]);
+  const missioni = Object.entries(d.missioni||{}).sort((a,b)=>b[1]-a[1]);
+
+  setSidebar(`
+    <div class="kpi-grid">
+      <div class="kpi accent">
+        <div class="kpi-label">Investimento totale</div>
+        <div class="kpi-value">${(d.cost_total_mld||0).toFixed(1)}</div>
+        <div class="kpi-unit">Miliardi di Euro</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Progetti unici</div>
+        <div class="kpi-value">${fmtN(d.n_projects)}</div>
+        <div class="kpi-unit">Codici CUP</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Gare d'appalto</div>
+        <div class="kpi-value">${fmtN(d.n_tenders)}</div>
+        <div class="kpi-unit">Codici CIG</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Comuni coinvolti</div>
+        <div class="kpi-value">${fmtN(7890)}</div>
+        <div class="kpi-unit">su 7.904 totali</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Stato dei progetti</div>
+      <div class="status-bar">
+        <div class="status-item attivo"><span class="val">${fmtN(attivo)}</span>Attivi</div>
+        <div class="status-item chiuso"><span class="val">${fmtN(chiuso)}</span>Chiusi</div>
+      </div>
+    </div>
+
+    ${efficiencyBlock(d)}
+
+    ${missioni.length ? `
+    <div class="section">
+      <div class="section-title">Missioni PNRR</div>
+      <div class="tag-list">${missioni.map(([m,n])=>`<span class="tag">${m} (${fmtN(n)})</span>`).join('')}</div>
+    </div>` : ''}
+
+    <div class="section">
+      <div class="section-title">Settori di intervento</div>
+      <div class="bar-list">
+        ${sectors.map(([s,n])=>`
+          <div class="bar-item">
+            <div class="bar-label">${capitalize(s.toLowerCase())} <span>${fmtN(n)}</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${(n/maxS*100).toFixed(1)}%"></div></div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Progetti per anno di decisione</div>
+      <div class="chart-wrap"><canvas id="chart-year"></canvas></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Drill-down per regione</div>
+      <div class="drill-list">
+        ${Object.values(DATA.regions).sort((a,b)=>b.cost_total_eur-a.cost_total_eur).map(r=>`
+          <div class="drill-item" onclick="drillRegion('${r.code}')">
+            <div>
+              <div class="drill-item-name">${capitalize(r.name)}</div>
+              <div class="drill-item-meta">${fmtN(r.n_projects)} progetti · ${fmtN(r.n_overdue||0)} ritardi</div>
+            </div>
+            <div class="drill-item-cost">${fmtEur(r.cost_total_eur)}</div>
+            <div class="drill-arrow">›</div>
+          </div>`).join('')}
+      </div>
+    </div>
+  `);
+
+  if (byYear.length) drawYearChart('chart-year', byYear);
+}
+
+function renderRegion(code) {
+  const d = DATA.regions[code];
+  if (!d) return;
+  const name = capitalize(d.name);
+  const stato = d.stato || {};
+  const attivo = stato.ATTIVO || 0;
+  const chiuso = stato.CHIUSO || 0;
+  const sectors = Object.entries(d.top_sectors||{}).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const maxS = sectors[0] ? sectors[0][1] : 1;
+
+  // Provinces in this region
+  const regionProvs = Object.values(DATA.provinces)
+    .filter(p => {
+      // Check if province belongs to this region via geo
+      const feat = geoProvinces.features.find(f =>
+        String(f.properties.prov_istat_code).padStart(3,'0') === p.code
+      );
+      return feat && String(feat.properties.reg_istat_code).padStart(2,'0') === code;
+    })
+    .sort((a,b) => b.cost_total_eur - a.cost_total_eur);
+
+  setBreadcrumb([
+    {label:'Italia',action:'drillNational()'},
+    {label:name,active:true},
+  ]);
+  setHeader(name, `${fmtN(d.n_projects)} progetti · ${fmtN(d.n_tenders)} gare d'appalto`);
+
+  setSidebar(`
+    <button class="back-btn" onclick="drillNational()">← Italia</button>
+    <div class="kpi-grid">
+      <div class="kpi accent">
+        <div class="kpi-label">Investimento totale</div>
+        <div class="kpi-value">${fmtEur(d.cost_total_eur)}</div>
+        <div class="kpi-unit">Euro investiti</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Progetti</div>
+        <div class="kpi-value">${fmtN(d.n_projects)}</div>
+        <div class="kpi-unit">Codici CUP</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Gare</div>
+        <div class="kpi-value">${fmtN(d.n_tenders)}</div>
+        <div class="kpi-unit">Codici CIG</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Costo medio</div>
+        <div class="kpi-value">${fmtEur(d.cost_avg_eur)}</div>
+        <div class="kpi-unit">per progetto</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Stato dei progetti</div>
+      <div class="status-bar">
+        <div class="status-item attivo"><span class="val">${fmtN(attivo)}</span>Attivi</div>
+        <div class="status-item chiuso"><span class="val">${fmtN(chiuso)}</span>Chiusi</div>
+      </div>
+    </div>
+
+    ${efficiencyBlock(d)}
+
+    ${sectors.length ? `
+    <div class="section">
+      <div class="section-title">Settori di intervento</div>
+      <div class="bar-list">
+        ${sectors.map(([s,n])=>`
+          <div class="bar-item">
+            <div class="bar-label">${capitalize(s.toLowerCase())} <span>${fmtN(n)}</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${(n/maxS*100).toFixed(1)}%"></div></div>
+          </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <div class="section">
+      <div class="section-title">Province</div>
+      <div class="drill-list">
+        ${regionProvs.map(p=>`
+          <div class="drill-item" onclick="drillProvince('${p.code}')">
+            <div>
+              <div class="drill-item-name">${capitalize(p.name)}</div>
+              <div class="drill-item-meta">${fmtN(p.n_projects)} progetti · ${fmtN(p.n_overdue||0)} ritardi</div>
+            </div>
+            <div class="drill-item-cost">${fmtEur(p.cost_total_eur)}</div>
+            <div class="drill-arrow">›</div>
+          </div>`).join('')}
+      </div>
+    </div>
+  `);
+}
+
+function renderProvince(code) {
+  const d = DATA.provinces[code];
+  if (!d) return;
+  const name = capitalize(d.name);
+  const stato = d.stato || {};
+  const attivo = stato.ATTIVO || 0;
+  const chiuso = stato.CHIUSO || 0;
+  const sectors = Object.entries(d.top_sectors||{}).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const maxS = sectors[0] ? sectors[0][1] : 1;
+
+  // Find region
+  const feat = geoProvinces.features.find(f =>
+    String(f.properties.prov_istat_code).padStart(3,'0') === code
+  );
+  const regCode = feat ? String(feat.properties.reg_istat_code).padStart(2,'0') : null;
+  const regName = regCode && DATA.regions[regCode] ? capitalize(DATA.regions[regCode].name) : '';
+
+  setBreadcrumb([
+    {label:'Italia',action:'drillNational()'},
+    ...(regCode ? [{label:regName,action:`drillRegion('${regCode}')`}] : []),
+    {label:name,active:true},
+  ]);
+  setHeader(name, `Provincia · ${fmtN(d.n_projects)} progetti`);
+
+  setSidebar(`
+    <button class="back-btn" onclick="drillRegion('${regCode}')">← ${regName}</button>
+    <div class="kpi-grid">
+      <div class="kpi accent">
+        <div class="kpi-label">Investimento totale</div>
+        <div class="kpi-value">${fmtEur(d.cost_total_eur)}</div>
+        <div class="kpi-unit">Euro investiti</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Progetti</div>
+        <div class="kpi-value">${fmtN(d.n_projects)}</div>
+        <div class="kpi-unit">Codici CUP</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Gare</div>
+        <div class="kpi-value">${fmtN(d.n_tenders)}</div>
+        <div class="kpi-unit">Codici CIG</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Costo medio</div>
+        <div class="kpi-value">${fmtEur(d.cost_avg_eur)}</div>
+        <div class="kpi-unit">per progetto</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Stato dei progetti</div>
+      <div class="status-bar">
+        <div class="status-item attivo"><span class="val">${fmtN(attivo)}</span>Attivi</div>
+        <div class="status-item chiuso"><span class="val">${fmtN(chiuso)}</span>Chiusi</div>
+      </div>
+    </div>
+
+    ${efficiencyBlock(d)}
+
+    ${sectors.length ? `
+    <div class="section">
+      <div class="section-title">Settori di intervento</div>
+      <div class="bar-list">
+        ${sectors.map(([s,n])=>`
+          <div class="bar-item">
+            <div class="bar-label">${capitalize(s.toLowerCase())} <span>${fmtN(n)}</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${(n/maxS*100).toFixed(1)}%"></div></div>
+          </div>`).join('')}
+      </div>
+    </div>` : ''}
+  `);
+}
+
+function renderAllProvinces() {
+  setBreadcrumb([{label:'Italia',action:'drillNational()'},{label:'Province',active:true}]);
+  setHeader('Tutte le Province', 'Vista per provincia');
+  const provs = Object.values(DATA.provinces).sort((a,b)=>b.cost_total_eur-a.cost_total_eur);
+  setSidebar(`
+    <button class="back-btn" onclick="drillNational()">← Italia</button>
+    <div class="drill-list">
+      ${provs.map(p=>`
+        <div class="drill-item" onclick="drillProvince('${p.code}')">
+          <div>
+            <div class="drill-item-name">${capitalize(p.name)}</div>
+            <div class="drill-item-meta">${fmtN(p.n_projects)} progetti</div>
+          </div>
+          <div class="drill-item-cost">${fmtEur(p.cost_total_eur)}</div>
+          <div class="drill-arrow">›</div>
+        </div>`).join('')}
+    </div>
+  `);
+}
+
+// ── CHART ──
+function drawYearChart(id, byYear) {
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  const el = document.getElementById(id);
+  if (!el) return;
+  chartInstance = new Chart(el, {
+    type: 'bar',
+    data: {
+      labels: byYear.map(([y])=>y),
+      datasets: [{
+        data: byYear.map(([,v])=>v),
+        backgroundColor: '#6AAEE0',
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45 } },
+        y: { grid: { color: '#F0F0F0' }, ticks: { font: { size: 10 } } },
+      },
+    }
+  });
+}
+
+// ── UI HELPERS ──
+function setBreadcrumb(items) {
+  const el = document.getElementById('breadcrumb');
+  el.innerHTML = items.map((item, i) =>
+    `<span class="${item.active ? 'active' : ''}" ${item.action ? `onclick="${item.action}"` : ''}>${item.label}</span>` +
+    (i < items.length - 1 ? `<span class="sep">›</span>` : '')
+  ).join('');
+}
+function setHeader(title, sub) {
+  document.getElementById('sidebar-title').textContent = title;
+  document.getElementById('sidebar-subtitle').textContent = sub;
+}
+function setSidebar(html) {
+  document.getElementById('sidebar-body').innerHTML = html;
+}
+
+// ── BOOT ──
+loadData();
+</script>
+</body>
+</html>
