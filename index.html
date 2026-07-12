@@ -241,6 +241,7 @@
 
   /* ── CHART ── */
   .chart-wrap { position: relative; height: 180px; margin-bottom: 8px; }
+  .pie-wrap { position: relative; height: 170px; margin-bottom: 4px; }
 
   /* ── DRILL LIST ── */
   .drill-list { display: flex; flex-direction: column; gap: 4px; }
@@ -993,84 +994,98 @@ function efficiencyBlock(d) {
     </div>`;
 }
 
-function settoriBlock(d, fillColor) {
-  if (!d.settori) return '';
-  const sectors = Object.entries(d.settori).sort((a,b)=>b[1]-a[1]).slice(0,6);
-  if (!sectors.length) return '';
-  const maxS = sectors[0][1];
-  return `
-    <div class="section">
-      <div class="section-title">Settori di intervento</div>
-      <div class="bar-list">
-        ${sectors.map(([s,n])=>`
-          <div class="bar-item">
-            <div class="bar-label">${capitalize(s)} <span>${fmtN(n)}</span></div>
-            <div class="bar-track"><div class="bar-fill ${fillColor||''}" style="width:${(n/maxS*100).toFixed(1)}%"></div></div>
-          </div>`).join('')}
-      </div>
-    </div>`;
-}
+// ── PIE CHART ENGINE ──
+let _pieQueue = [];
+let _pieIdx = 0;
 
-function sottosettoriBlock(d, fillColor) {
-  if (!d.sottosettori) return '';
-  const items = Object.entries(d.sottosettori).sort((a,b)=>b[1]-a[1]).slice(0,5);
+const PIE_PALETTES = {
+  blue:   ['#0A4F8A','#1A6DB5','#3B8ED1','#6AAEE0','#A8CEEF','#D6E8FA','#EBF4FC'],
+  green:  ['#03342A','#0A5A4A','#1A7D68','#3B9F88','#6ABFAA','#A8DECE','#D6F0E8'],
+  purple: ['#3B0764','#6B21A8','#9333EA','#C084FC','#DDD6FE','#EDE9FE','#F5F3FF'],
+  orange: ['#7C2D12','#C2410C','#EA580C','#FB923C','#FED7AA','#FFEDD5','#FFF7ED'],
+  teal:   ['#042F2E','#134E4A','#0F766E','#14B8A6','#5EEAD4','#99F6E4','#CCFBF1'],
+};
+
+function pieBlock(title, dataObj, palette, maxItems = 7) {
+  if (!dataObj) return '';
+  const items = Object.entries(dataObj).sort((a,b)=>b[1]-a[1]).slice(0, maxItems);
   if (!items.length) return '';
-  const maxV = items[0][1];
+  const id = `pie-${++_pieIdx}`;
+  const colors = PIE_PALETTES[palette] || PIE_PALETTES.blue;
+  _pieQueue.push({ id, labels: items.map(([s])=>capitalize(s)), data: items.map(([,n])=>n), colors });
   return `
     <div class="section">
-      <div class="section-title">Sotto-settori</div>
-      <div class="bar-list">
-        ${items.map(([s,n])=>`
-          <div class="bar-item">
-            <div class="bar-label">${capitalize(s)} <span>${fmtN(n)}</span></div>
-            <div class="bar-track"><div class="bar-fill ${fillColor||''}" style="width:${(n/maxV*100).toFixed(1)}%;opacity:.75"></div></div>
-          </div>`).join('')}
-      </div>
+      <div class="section-title">${title}</div>
+      <div class="pie-wrap"><canvas id="${id}"></canvas></div>
     </div>`;
 }
 
+function flushPieCharts() {
+  _pieQueue.forEach(({ id, labels, data, colors }) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    new Chart(el, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        cutout: '55%',
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: {
+              font: { family: "'Titillium Web', sans-serif", size: 10 },
+              color: '#3D4045',
+              boxWidth: 10,
+              padding: 6,
+              generateLabels: chart => {
+                const ds = chart.data.datasets[0];
+                const total = ds.data.reduce((a,b)=>a+b,0);
+                return chart.data.labels.map((lbl, i) => ({
+                  text: `${lbl.length > 22 ? lbl.slice(0,21)+'…' : lbl} (${ds.data[i]})`,
+                  fillStyle: ds.backgroundColor[i],
+                  strokeStyle: '#fff',
+                  lineWidth: 2,
+                  index: i,
+                  hidden: false,
+                }));
+              },
+            },
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+                const pct = ((ctx.parsed / total)*100).toFixed(1);
+                return ` ${ctx.label}: ${ctx.parsed} (${pct}%)`;
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+  _pieQueue = [];
+}
+
+function settoriBlock(d) {
+  return pieBlock('Settori di intervento', d.settori, 'blue');
+}
+function sottosettoriBlock(d) {
+  return pieBlock('Sotto-settori', d.sottosettori, 'green');
+}
 function categorieBlock(d) {
-  if (!d.categorie) return '';
-  const items = Object.entries(d.categorie).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  if (!items.length) return '';
-  return `
-    <div class="section">
-      <div class="section-title">Categorie</div>
-      <div class="tag-list">
-        ${items.map(([s,n])=>`<span class="tag">${capitalize(s)} <b>(${fmtN(n)})</b></span>`).join('')}
-      </div>
-    </div>`;
+  return pieBlock('Categorie', d.categorie, 'purple');
 }
-
 function natureBlock(d) {
-  if (!d.nature) return '';
-  const items = Object.entries(d.nature).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  if (!items.length) return '';
-  const maxV = items[0][1];
-  return `
-    <div class="section">
-      <div class="section-title">Natura degli interventi</div>
-      <div class="bar-list">
-        ${items.map(([s,n])=>`
-          <div class="bar-item">
-            <div class="bar-label">${capitalize(s)} <span>${fmtN(n)}</span></div>
-            <div class="bar-track"><div class="bar-fill orange" style="width:${(n/maxV*100).toFixed(1)}%"></div></div>
-          </div>`).join('')}
-      </div>
-    </div>`;
+  return pieBlock('Natura degli interventi', d.nature, 'orange');
 }
-
 function tipologieBlock(d) {
-  if (!d.tipologie) return '';
-  const items = Object.entries(d.tipologie).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  if (!items.length) return '';
-  return `
-    <div class="section">
-      <div class="section-title">Tipologie</div>
-      <div class="tag-list">
-        ${items.map(([s,n])=>`<span class="tag blue">${capFirst(s)} (${fmtN(n)})</span>`).join('')}
-      </div>
-    </div>`;
+  return pieBlock('Tipologie', d.tipologie, 'teal');
 }
 
 function missioniBlock(d) {
@@ -1522,7 +1537,10 @@ function setHeader(title, sub) {
   document.getElementById('sidebar-subtitle').textContent = sub;
 }
 function setSidebar(html) {
+  _pieIdx = 0;
+  _pieQueue = [];
   document.getElementById('sidebar-body').innerHTML = html;
+  requestAnimationFrame(() => flushPieCharts());
 }
 
 // ═══════════════════════════════════════════════
