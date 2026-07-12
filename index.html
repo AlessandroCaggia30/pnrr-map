@@ -1196,6 +1196,7 @@ function statoBlock(d) {
 
 // ── NATIONAL ──
 function renderNational() {
+  resetPies();
   const d = DATA.national;
   setBreadcrumb([{label:'Italia', active:true}]);
   setHeader('Italia', `${fmtN(d.n_projects)} progetti · ${fmtN(d.n_tenders)} gare d'appalto`);
@@ -1258,6 +1259,7 @@ function renderNational() {
 
 // ── REGION ──
 function renderRegion(code) {
+  resetPies();
   const d = DATA.regions[code];
   if (!d) return;
   const name = capitalize(d.name);
@@ -1310,6 +1312,7 @@ function renderRegion(code) {
 
 // ── PROVINCE ──
 function renderProvince(code) {
+  resetPies();
   const d = DATA.provinces[code];
   if (!d) return;
   const name = capitalize(d.name);
@@ -1367,6 +1370,7 @@ function renderProvince(code) {
 
 // ── COMUNE ──
 function renderComune(code) {
+  resetPies();
   state.selectedComune = code;
   const d = DATA.comuni[code];
   if (!d) return;
@@ -1537,11 +1541,10 @@ function setHeader(title, sub) {
   document.getElementById('sidebar-subtitle').textContent = sub;
 }
 function setSidebar(html) {
-  _pieIdx = 0;
-  _pieQueue = [];
   document.getElementById('sidebar-body').innerHTML = html;
   requestAnimationFrame(() => flushPieCharts());
 }
+function resetPies() { _pieIdx = 0; _pieQueue = []; }
 
 // ═══════════════════════════════════════════════
 // BOOT
